@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { extractKeyJoints, calculateAngle } from "@/lib/biomechanics";
-import { updateBicepCurl, ExerciseState } from "@/lib/repCounter";
+import { EXERCISES, updateExercise, ExerciseState } from "@/lib/repCounter";
 
 // The skeleton connection map (indices handled by the model)
 const POSE_CONNECTIONS: [number, number][] = [
@@ -20,10 +20,20 @@ export default function WebcamFeed() {
   const [isLoading, setIsLoading] = useState(true);
   const [isModelLoaded, setIsModelLoaded] = useState(false);
 
-  // Rep Counter State
+  // Multi-Exercise State
+  const [activeExerciseId, setActiveExerciseId] = useState<string>("curl");
   const [repCount, setRepCount] = useState(0);
   const [progress, setProgress] = useState(0);
   const curStateRef = useRef<ExerciseState>("down");
+
+  // Keep a ref to the active ID for the render loop (avoids stale closures)
+  const activeIdRef = useRef<string>("curl");
+  useEffect(() => {
+    activeIdRef.current = activeExerciseId;
+    setRepCount(0); // Reset count when switching exercises
+    setProgress(0);
+    curStateRef.current = "down";
+  }, [activeExerciseId]);
 
   useEffect(() => {
     let stream: MediaStream | null = null;
@@ -146,15 +156,14 @@ export default function WebcamFeed() {
               ctx.scale(-1, 1);
               ctx.translate(-canvas.width, 0);
             } else {
-              // Calculate Right Elbow Angle
-              const angle = calculateAngle(
-                joints.rightShoulder,
-                joints.rightElbow,
-                joints.rightWrist
-              );
+              // Multi-Exercise Logic
+              const config = EXERCISES[activeIdRef.current];
+              if (!config) return;
 
-              // Update Rep Counter
-              const result = updateBicepCurl(angle, curStateRef.current, repCount);
+              const angle = config.getAngle(joints);
+
+              // Update Rep Counter using the Generic Engine
+              const result = updateExercise(angle, curStateRef.current, repCount, config);
 
               if (result.newCount !== repCount) {
                 setRepCount(result.newCount);
@@ -162,22 +171,27 @@ export default function WebcamFeed() {
               setProgress(result.progress);
               curStateRef.current = result.newState;
 
-              // Draw it next to the elbow
+              // Visual Feedback (Drawing Logic)
               ctx.fillStyle = "#ffffff";
               ctx.font = "bold 24px Inter";
-              ctx.fillText(`${angle}°`, joints.rightElbow.x * canvas.width, joints.rightElbow.y * canvas.height - 20);
 
-              // Draw Progress Bar (on-joint)
+              // Find coordinates for the relevant joint (for bicep curl it's the elbow, for squats it's the knee)
+              const displayJoint = activeIdRef.current === "curl" ? joints.rightElbow : joints.rightKnee;
+              const { x, y } = displayJoint;
+
+              ctx.fillText(`${angle}°`, x * canvas.width, y * canvas.height - 20);
+
+              // Draw Progress Gauge
               ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
               ctx.lineWidth = 6;
               ctx.beginPath();
-              ctx.arc(joints.rightElbow.x * canvas.width, joints.rightElbow.y * canvas.height, 40, 0, 2 * Math.PI);
+              ctx.arc(x * canvas.width, y * canvas.height, 40, 0, 2 * Math.PI);
               ctx.stroke();
 
               ctx.strokeStyle = "#10b981";
               ctx.lineWidth = 6;
               ctx.beginPath();
-              ctx.arc(joints.rightElbow.x * canvas.width, joints.rightElbow.y * canvas.height, 40, -Math.PI / 2, (-Math.PI / 2) + (result.progress * 2 * Math.PI));
+              ctx.arc(x * canvas.width, y * canvas.height, 40, -Math.PI / 2, (-Math.PI / 2) + (result.progress * 2 * Math.PI));
               ctx.stroke();
             }
           }
@@ -221,17 +235,41 @@ export default function WebcamFeed() {
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
 
       {/* Production-Level HUD */}
-      <div className="absolute top-6 right-6 flex flex-col items-end gap-2">
-        <div className="bg-black/60 backdrop-blur-xl border border-white/10 p-4 rounded-2xl min-w-[120px] text-center shadow-2xl">
-          <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-[0.2em]">Reps</p>
-          <p className="text-5xl font-black text-white tabular-nums">{repCount}</p>
+      <div className="absolute top-6 left-6 flex flex-col gap-4">
+        {/* Exercise Selector */}
+        <div className="flex gap-2 bg-black/40 backdrop-blur-md p-1.5 rounded-xl border border-white/10">
+          {Object.values(EXERCISES).map((ex) => (
+            <button
+              key={ex.id}
+              onClick={() => setActiveExerciseId(ex.id)}
+              className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${activeExerciseId === ex.id
+                  ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20"
+                  : "text-zinc-400 hover:text-white hover:bg-white/5"
+                }`}
+            >
+              {ex.name}
+            </button>
+          ))}
         </div>
 
-        <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-emerald-500 transition-all duration-300 ease-out"
-            style={{ width: `${progress * 100}%` }}
-          />
+        <div className="bg-black/60 backdrop-blur-xl border border-white/10 p-4 rounded-2xl min-w-[160px] shadow-2xl">
+          <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-[0.2em] mb-1">Active Session</p>
+          <div className="flex items-baseline justify-between gap-4">
+            <h2 className="text-xl font-bold text-white tracking-tight">
+              {EXERCISES[activeExerciseId]?.name}
+            </h2>
+            <div className="flex flex-col items-end">
+              <p className="text-3xl font-black text-white tabular-nums">{repCount}</p>
+              <p className="text-[10px] text-zinc-500 font-bold uppercase">Reps</p>
+            </div>
+          </div>
+
+          <div className="mt-4 w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-emerald-500 transition-all duration-300 ease-out"
+              style={{ width: `${progress * 100}%` }}
+            />
+          </div>
         </div>
       </div>
 
