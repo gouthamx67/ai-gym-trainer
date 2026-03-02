@@ -24,6 +24,7 @@ export default function WebcamFeed() {
   const [activeExerciseId, setActiveExerciseId] = useState<string>("curl");
   const [repCount, setRepCount] = useState(0);
   const [progress, setProgress] = useState(0);
+  const [feedback, setFeedback] = useState<string | null>(null);
   const curStateRef = useRef<ExerciseState>("down");
 
   // Keep a ref to the active ID for the render loop (avoids stale closures)
@@ -163,12 +164,13 @@ export default function WebcamFeed() {
               const angle = config.getAngle(joints);
 
               // Update Rep Counter using the Generic Engine
-              const result = updateExercise(angle, curStateRef.current, repCount, config);
+              const result = updateExercise(joints, angle, curStateRef.current, repCount, config);
 
               if (result.newCount !== repCount) {
                 setRepCount(result.newCount);
               }
               setProgress(result.progress);
+              setFeedback(result.feedback || null);
               curStateRef.current = result.newState;
 
               // Visual Feedback (Drawing Logic)
@@ -243,14 +245,24 @@ export default function WebcamFeed() {
               key={ex.id}
               onClick={() => setActiveExerciseId(ex.id)}
               className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${activeExerciseId === ex.id
-                  ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20"
-                  : "text-zinc-400 hover:text-white hover:bg-white/5"
+                ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20"
+                : "text-zinc-400 hover:text-white hover:bg-white/5"
                 }`}
             >
               {ex.name}
             </button>
           ))}
         </div>
+
+        {/* Feedback Alert */}
+        {feedback && (
+          <div className="bg-amber-500/90 backdrop-blur-md px-6 py-4 rounded-2xl shadow-2xl border border-amber-400/50 animate-pulse transition-all">
+            <p className="text-amber-100 text-[10px] font-bold uppercase tracking-[0.2em] mb-1 text-center">Form Correction</p>
+            <p className="text-2xl font-black text-white text-center tracking-tight uppercase whitespace-nowrap">
+              {feedback}
+            </p>
+          </div>
+        )}
 
         <div className="bg-black/60 backdrop-blur-xl border border-white/10 p-4 rounded-2xl min-w-[160px] shadow-2xl">
           <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-[0.2em] mb-1">Active Session</p>

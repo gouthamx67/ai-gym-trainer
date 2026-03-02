@@ -9,21 +9,26 @@ export interface ExerciseResult {
     feedback?: string;
 }
 
+export interface FormRule {
+    id: string;
+    message: string;
+    check: (joints: any, angle: number, state: ExerciseState) => boolean;
+}
+
 export interface ExerciseConfig {
     id: string;
     name: string;
-    type: "angle"; // For now we only support angle-based, can add 'distance' later
+    type: "angle";
     getAngle: (joints: any) => number;
     thresholds: {
         up: number;
         down: number;
     };
+    formRules: FormRule[];
 }
 
 /**
  * Exercise Metadata Registry
- * This is production-level architecture: separating the logic of WHAT an exercise is
- * from the engine that detects it.
  */
 export const EXERCISES: Record<string, ExerciseConfig> = {
     curl: {
@@ -32,9 +37,21 @@ export const EXERCISES: Record<string, ExerciseConfig> = {
         type: "angle",
         getAngle: (joints) => calculateAngle(joints.rightShoulder, joints.rightElbow, joints.rightWrist),
         thresholds: {
-            up: 30,    // Fully curled
-            down: 160, // Fully extended
+            up: 30,
+            down: 160,
         },
+        formRules: [
+            {
+                id: "partial-up",
+                message: "Curl higher!",
+                check: (joints, angle, state) => state === "down" && angle < 60 && angle > 35,
+            },
+            {
+                id: "partial-down",
+                message: "Extend fully!",
+                check: (joints, angle, state) => state === "up" && angle > 130 && angle < 155,
+            },
+        ],
     },
     squat: {
         id: "squat",
@@ -42,9 +59,16 @@ export const EXERCISES: Record<string, ExerciseConfig> = {
         type: "angle",
         getAngle: (joints) => calculateAngle(joints.rightHip, joints.rightKnee, joints.rightAnkle),
         thresholds: {
-            up: 90,    // Thighs parallel to floor
-            down: 160, // Standing up
+            up: 90,
+            down: 160,
         },
+        formRules: [
+            {
+                id: "depth",
+                message: "Go Lower!",
+                check: (joints, angle, state) => state === "down" && angle < 115 && angle > 95,
+            },
+        ],
     },
 };
 
@@ -53,6 +77,7 @@ export const EXERCISES: Record<string, ExerciseConfig> = {
  * Works for any "angle-based" exercise by looking at its specific thresholds.
  */
 export const updateExercise = (
+    joints: any,
     angle: number,
     prevState: ExerciseState,
     currentCount: number,
@@ -60,6 +85,13 @@ export const updateExercise = (
 ): ExerciseResult => {
     let newState = prevState;
     let newCount = currentCount;
+    let feedback: string | undefined;
+
+    // Evaluate Form Rules
+    const activeRule = config.formRules.find(rule => rule.check(joints, angle, prevState));
+    if (activeRule) {
+        feedback = activeRule.message;
+    }
 
     // Calculate progress: mapping current angle between the two thresholds
     const { up, down } = config.thresholds;
@@ -88,5 +120,5 @@ export const updateExercise = (
         }
     }
 
-    return { newState, newCount, progress };
+    return { newState, newCount, progress, feedback };
 };
