@@ -25,7 +25,47 @@ export default function WebcamFeed() {
   const [repCount, setRepCount] = useState(0);
   const [progress, setProgress] = useState(0);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const curStateRef = useRef<ExerciseState>("down");
+
+  // Track session start time
+  const sessionStartRef = useRef<number>(Date.now());
+  const errorCountRef = useRef<number>(0);
+
+  const saveSession = async () => {
+    if (repCount === 0) return;
+
+    setIsSaving(true);
+    const duration = Math.floor((Date.now() - sessionStartRef.current) / 1000);
+
+    // Simple quality score calculation: 100 minus a penalty for each form error detected
+    const qualityScore = Math.max(0, 100 - (errorCountRef.current * 2));
+
+    try {
+      const response = await fetch("http://localhost:5000/api/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          exerciseId: activeExerciseId,
+          count: repCount,
+          qualityScore,
+          duration
+        }),
+      });
+
+      if (response.ok) {
+        alert("Workout Saved Successfully!");
+        setRepCount(0);
+        errorCountRef.current = 0;
+        sessionStartRef.current = Date.now();
+      }
+    } catch (err) {
+      console.error("Save error:", err);
+      alert("Failed to save workout. Is the server running?");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   // Keep a ref to the active ID for the render loop (avoids stale closures)
   const activeIdRef = useRef<string>("curl");
@@ -170,7 +210,14 @@ export default function WebcamFeed() {
                 setRepCount(result.newCount);
               }
               setProgress(result.progress);
-              setFeedback(result.feedback || null);
+
+              if (result.feedback && result.feedback !== feedback) {
+                setFeedback(result.feedback);
+                errorCountRef.current += 1; // Track errors for the final quality score
+              } else if (!result.feedback) {
+                setFeedback(null);
+              }
+
               curStateRef.current = result.newState;
 
               // Visual Feedback (Drawing Logic)
@@ -282,6 +329,17 @@ export default function WebcamFeed() {
               style={{ width: `${progress * 100}%` }}
             />
           </div>
+
+          <button
+            onClick={saveSession}
+            disabled={isSaving || repCount === 0}
+            className={`mt-6 w-full py-3 rounded-xl font-bold text-sm uppercase tracking-widest transition-all ${repCount > 0
+                ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-900/20 active:scale-95"
+                : "bg-zinc-800 text-zinc-500 cursor-not-allowed"
+              }`}
+          >
+            {isSaving ? "Saving..." : "Finish Workout"}
+          </button>
         </div>
       </div>
 
