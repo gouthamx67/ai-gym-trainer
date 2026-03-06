@@ -25,6 +25,20 @@ app.get('/health', (req, res) => {
 });
 
 /**
+ * Production Route: Get Workout History
+ * Fetches all previous sessions for the analytics dashboard.
+ */
+app.get('/api/sessions', async (req, res) => {
+    try {
+        const sessions = await Session.find().sort({ timestamp: -1 });
+        res.json(sessions);
+    } catch (err) {
+        console.error('Error fetching sessions:', err);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+/**
  * Production Route: Save Workout Session
  * Called by the frontend when a user finishes a set.
  */
