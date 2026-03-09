@@ -28,6 +28,8 @@ export default function WebcamFeed() {
   const [isSaving, setIsSaving] = useState(false);
   const curStateRef = useRef<ExerciseState>("down");
 
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+
   // Track session start time
   const sessionStartRef = useRef<number>(Date.now());
   const errorCountRef = useRef<number>(0);
@@ -42,7 +44,7 @@ export default function WebcamFeed() {
     const qualityScore = Math.max(0, 100 - (errorCountRef.current * 2));
 
     try {
-      const response = await fetch("http://localhost:5000/api/sessions", {
+      const response = await fetch(`${API_BASE_URL}/api/sessions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -334,8 +336,8 @@ export default function WebcamFeed() {
             onClick={saveSession}
             disabled={isSaving || repCount === 0}
             className={`mt-6 w-full py-3 rounded-xl font-bold text-sm uppercase tracking-widest transition-all ${repCount > 0
-                ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-900/20 active:scale-95"
-                : "bg-zinc-800 text-zinc-500 cursor-not-allowed"
+              ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-900/20 active:scale-95"
+              : "bg-zinc-800 text-zinc-500 cursor-not-allowed"
               }`}
           >
             {isSaving ? "Saving..." : "Finish Workout"}
