@@ -1,22 +1,21 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../db');
 
-const Session = sequelize.define('Session', {
+const WorkoutLog = sequelize.define('WorkoutLog', {
     userId: {
         type: DataTypes.STRING,
         allowNull: true,
         defaultValue: null,
     },
-    exerciseId: {
+    programId: {
         type: DataTypes.STRING,
         allowNull: false,
     },
-    programId: {
+    programName: {
         type: DataTypes.STRING,
-        allowNull: true,
-        defaultValue: null,
+        allowNull: false,
     },
-    count: {
+    totalReps: {
         type: DataTypes.INTEGER,
         allowNull: false,
         defaultValue: 0,
@@ -26,38 +25,37 @@ const Session = sequelize.define('Session', {
         allowNull: false,
         defaultValue: 100,
     },
-    duration: {
+    durationSeconds: {
         type: DataTypes.INTEGER,
         allowNull: false,
         defaultValue: 0,
     },
-    setBreakdown: {
-        type: DataTypes.JSONB,
-        allowNull: false,
-        defaultValue: [],
-    },
-    formErrorCount: {
-        type: DataTypes.INTEGER,
-        allowNull: false,
-        defaultValue: 0,
-    },
-    formErrorDetails: {
+    exerciseBreakdown: {
         type: DataTypes.JSONB,
         allowNull: false,
         defaultValue: {},
     },
-    timestamp: {
+    formErrors: {
+        type: DataTypes.JSONB,
+        allowNull: false,
+        defaultValue: {},
+    },
+    completed: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+    },
+    completedAt: {
         type: DataTypes.DATE,
         allowNull: false,
         defaultValue: DataTypes.NOW,
     },
 }, {
     indexes: [
-        { fields: ['timestamp'] },
-        { fields: ['exerciseId', 'timestamp'] },
-        { fields: ['userId', 'timestamp'] },
-        { fields: ['programId', 'timestamp'] },
+        { fields: ['completedAt'] },
+        { fields: ['userId', 'completedAt'] },
+        { fields: ['programId'] },
     ],
 });
 
-module.exports = Session;
+module.exports = WorkoutLog;

@@ -1,68 +1,60 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const path = require('path');
 
-// Models
-const Session = require('./models/Session');
+dotenv.config({ path: path.join(__dirname, '.env') });
 
-dotenv.config();
+// Routes
+const sessionRoutes = require('./routes/sessions');
+const workoutLogRoutes = require('./routes/workoutLogs');
+const personalRecordRoutes = require('./routes/personalRecords');
+const coachingRoutes = require('./routes/coaching');
+const growthRoutes = require('./routes/growth');
+
+const sequelize = require('./db');
 
 const app = express();
 
 // Middleware
 app.use(cors());
-app.use(express.json()); // Essential for parsing AI data from frontend
+app.use(express.json());
 
 // Database Connection
-mongoose.connect(process.env.MONGODB_URI)
-    .then(() => console.log('✅ MongoDB Connected'))
-    .catch(err => console.error('❌ MongoDB Connection Error:', err));
+async function connectDatabase() {
+    try {
+        await sequelize.authenticate();
+        await sequelize.sync();
+        console.log('✅ Postgres Connected');
+    } catch (err) {
+        console.error('❌ Postgres Connection Error:', err);
+        process.exit(1);
+    }
+}
 
-// Routes
+// Register Modular Routes
+app.use('/api/sessions', sessionRoutes);
+app.use('/api/workout-logs', workoutLogRoutes);
+app.use('/api/personal-records', personalRecordRoutes);
+app.use('/api/coaching', coachingRoutes);
+app.use('/api/growth', growthRoutes);
+
+
+// Health Check
 app.get('/health', (req, res) => {
-    res.json({ status: 'active', engine: 'AI Gym Trainer Backend' });
-});
-
-/**
- * Production Route: Get Workout History
- * Fetches all previous sessions for the analytics dashboard.
- */
-app.get('/api/sessions', async (req, res) => {
-    try {
-        const sessions = await Session.find().sort({ timestamp: -1 });
-        res.json(sessions);
-    } catch (err) {
-        console.error('Error fetching sessions:', err);
-        res.status(500).json({ error: 'Internal Server Error' });
-    }
-});
-
-/**
- * Production Route: Save Workout Session
- * Called by the frontend when a user finishes a set.
- */
-app.post('/api/sessions', async (req, res) => {
-    try {
-        const { exerciseId, count, qualityScore, duration } = req.body;
-
-        const newSession = new Session({
-            exerciseId,
-            count,
-            qualityScore,
-            duration
-        });
-
-        const savedSession = await newSession.save();
-        res.status(201).json(savedSession);
-    } catch (err) {
-        console.error('Error saving session:', err);
-        res.status(500).json({ error: 'Internal Server Error' });
-    }
+    res.json({ 
+        status: 'active', 
+        engine: 'AI Gym Trainer Pro Backend',
+        version: '2.0.0',
+        platform: 'Next-Gen SaaS'
+    });
 });
 
 // Start Server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
+connectDatabase().then(() => {
+    app.listen(PORT, () => {
+        console.log(`🚀 AI Gym Trainer Server running on port ${PORT}`);
+    });
 });
+

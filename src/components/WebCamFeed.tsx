@@ -25,6 +25,8 @@ export default function WebcamFeed() {
   const [repCount, setRepCount] = useState(0);
   const [progress, setProgress] = useState(0);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [combo, setCombo] = useState(0);
+  const [hypeMessage, setHypeMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const curStateRef = useRef<ExerciseState>("down");
 
@@ -210,12 +212,22 @@ export default function WebcamFeed() {
 
               if (result.newCount !== repCount) {
                 setRepCount(result.newCount);
+                setCombo((c) => c + 1);
+                if ((result.newCount > 0) && (result.newCount % 5 === 0)) {
+                  setHypeMessage(`🔥 ${result.newCount} reps! Keep cooking`);
+                } else if (result.newCount > 0 && result.newCount % 3 === 0) {
+                  setHypeMessage(`⚡ Combo x${combo + 1}`);
+                } else {
+                  setHypeMessage(null);
+                }
               }
               setProgress(result.progress);
 
               if (result.feedback && result.feedback !== feedback) {
                 setFeedback(result.feedback);
                 errorCountRef.current += 1; // Track errors for the final quality score
+                setCombo(0);
+                setHypeMessage(null);
               } else if (!result.feedback) {
                 setFeedback(null);
               }
@@ -223,14 +235,29 @@ export default function WebcamFeed() {
               curStateRef.current = result.newState;
 
               // Visual Feedback (Drawing Logic)
-              ctx.fillStyle = "#ffffff";
-              ctx.font = "bold 24px Inter";
+              ctx.font = "bold 20px Inter";
+              ctx.textBaseline = "bottom";
+              ctx.textAlign = "center";
 
               // Find coordinates for the relevant joint (for bicep curl it's the elbow, for squats it's the knee)
               const displayJoint = activeIdRef.current === "curl" ? joints.rightElbow : joints.rightKnee;
               const { x, y } = displayJoint;
+              const labelX = x * canvas.width;
+              const labelY = y * canvas.height - 30;
+              const labelText = `${angle}°`;
+              const padding = 10;
+              const textMetrics = ctx.measureText(labelText);
+              const labelWidth = textMetrics.width + padding * 2;
+              const labelHeight = 28;
+              const clampedX = Math.min(Math.max(labelX, labelWidth / 2 + padding), canvas.width - labelWidth / 2 - padding);
+              const clampedY = Math.max(labelY, labelHeight + padding);
 
-              ctx.fillText(`${angle}°`, x * canvas.width, y * canvas.height - 20);
+              // Background for readability and to avoid overlapping the subject too heavily
+              ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+              ctx.fillRect(clampedX - labelWidth / 2, clampedY - labelHeight, labelWidth, labelHeight);
+
+              ctx.fillStyle = "#ffffff";
+              ctx.fillText(labelText, clampedX, clampedY - 6);
 
               // Draw Progress Gauge
               ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
@@ -272,7 +299,8 @@ export default function WebcamFeed() {
   }
 
   return (
-    <div className="relative w-full aspect-video bg-zinc-900 rounded-xl overflow-hidden shadow-2xl group border border-zinc-800">
+    <>
+      <div className="relative w-full aspect-video bg-zinc-900 rounded-xl overflow-hidden shadow-2xl group border border-zinc-800">
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center z-10 bg-zinc-950/80 backdrop-blur-sm">
           <div className="flex flex-col items-center gap-4">
@@ -284,73 +312,90 @@ export default function WebcamFeed() {
 
       <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover transform -scale-x-100" playsInline muted autoPlay />
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
+    </div>
 
-      {/* Production-Level HUD */}
-      <div className="absolute top-6 left-6 flex flex-col gap-4">
-        {/* Exercise Selector */}
-        <div className="flex gap-2 bg-black/40 backdrop-blur-md p-1.5 rounded-xl border border-white/10">
-          {Object.values(EXERCISES).map((ex) => (
-            <button
-              key={ex.id}
-              onClick={() => setActiveExerciseId(ex.id)}
-              className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${activeExerciseId === ex.id
-                ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20"
-                : "text-zinc-400 hover:text-white hover:bg-white/5"
-                }`}
-            >
-              {ex.name}
-            </button>
-          ))}
+    <div className="flex flex-col gap-4 pt-4">
+      <div className="flex flex-wrap gap-2 bg-black/40 backdrop-blur-md p-1.5 rounded-xl border border-white/10">
+        {Object.values(EXERCISES).map((ex) => (
+          <button
+            key={ex.id}
+            onClick={() => setActiveExerciseId(ex.id)}
+            className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${activeExerciseId === ex.id
+              ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20"
+              : "text-zinc-400 hover:text-white hover:bg-white/5"
+              }`}
+          >
+            {ex.name}
+          </button>
+        ))}
+      </div>
+
+      {feedback && (
+        <div className="bg-amber-500/90 backdrop-blur-md px-6 py-4 rounded-2xl shadow-2xl border border-amber-400/50 animate-pulse transition-all">
+          <p className="text-amber-100 text-[10px] font-bold uppercase tracking-[0.2em] mb-1 text-center">Form Correction</p>
+          <p className="text-2xl font-black text-white text-center tracking-tight uppercase whitespace-nowrap">
+            {feedback}
+          </p>
         </div>
+      )}
 
-        {/* Feedback Alert */}
-        {feedback && (
-          <div className="bg-amber-500/90 backdrop-blur-md px-6 py-4 rounded-2xl shadow-2xl border border-amber-400/50 animate-pulse transition-all">
-            <p className="text-amber-100 text-[10px] font-bold uppercase tracking-[0.2em] mb-1 text-center">Form Correction</p>
-            <p className="text-2xl font-black text-white text-center tracking-tight uppercase whitespace-nowrap">
-              {feedback}
-            </p>
-          </div>
-        )}
+      {hypeMessage && !feedback && (
+        <div className="bg-emerald-500/85 backdrop-blur-md px-5 py-3 rounded-2xl shadow-2xl border border-emerald-300/50 transition-all">
+          <p className="text-emerald-50 text-xs font-bold uppercase tracking-[0.2em] mb-1 text-center">Momentum Spike</p>
+          <p className="text-xl font-black text-white text-center tracking-tight uppercase whitespace-nowrap">
+            {hypeMessage}
+          </p>
+        </div>
+      )}
 
-        <div className="bg-black/60 backdrop-blur-xl border border-white/10 p-4 rounded-2xl min-w-[160px] shadow-2xl">
-          <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-[0.2em] mb-1">Active Session</p>
-          <div className="flex items-baseline justify-between gap-4">
+      <div className="bg-black/60 backdrop-blur-xl border border-white/10 p-4 rounded-2xl shadow-2xl">
+        <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-[0.2em] mb-1">Active Session</p>
+        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div>
             <h2 className="text-xl font-bold text-white tracking-tight">
               {EXERCISES[activeExerciseId]?.name}
             </h2>
-            <div className="flex flex-col items-end">
+            <p className="text-[10px] text-zinc-400 uppercase tracking-[0.2em] mt-1">Current Workout</p>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <div className="text-right">
               <p className="text-3xl font-black text-white tabular-nums">{repCount}</p>
               <p className="text-[10px] text-zinc-500 font-bold uppercase">Reps</p>
             </div>
+            <div className="text-right">
+              <p className="text-xl font-black text-emerald-400">x{combo}</p>
+              <p className="text-[10px] text-zinc-500 font-bold uppercase">Combo</p>
+            </div>
           </div>
-
-          <div className="mt-4 w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-emerald-500 transition-all duration-300 ease-out"
-              style={{ width: `${progress * 100}%` }}
-            />
-          </div>
-
-          <button
-            onClick={saveSession}
-            disabled={isSaving || repCount === 0}
-            className={`mt-6 w-full py-3 rounded-xl font-bold text-sm uppercase tracking-widest transition-all ${repCount > 0
-              ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-900/20 active:scale-95"
-              : "bg-zinc-800 text-zinc-500 cursor-not-allowed"
-              }`}
-          >
-            {isSaving ? "Saving..." : "Finish Workout"}
-          </button>
         </div>
+
+        <div className="mt-4 w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-emerald-500 transition-all duration-300 ease-out"
+            style={{ width: `${progress * 100}%` }}
+          />
+        </div>
+
+        <button
+          onClick={saveSession}
+          disabled={isSaving || repCount === 0}
+          className={`mt-6 w-full py-3 rounded-xl font-bold text-sm uppercase tracking-widest transition-all ${repCount > 0
+            ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-900/20 active:scale-95"
+            : "bg-zinc-800 text-zinc-500 cursor-not-allowed"
+            }`}
+        >
+          {isSaving ? "Saving..." : "Finish Workout"}
+        </button>
       </div>
 
-      <div className="absolute bottom-4 left-4 flex items-center gap-2 bg-black/50 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10">
+      <div className="flex items-center gap-2 bg-black/50 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10">
         <div className={`w-2 h-2 rounded-full ${isModelLoaded ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500 animate-bounce'}`}></div>
         <span className={`text-xs font-semibold uppercase tracking-wider ${isModelLoaded ? 'text-emerald-500' : 'text-amber-500'}`}>
           {isModelLoaded ? 'Pose Engine Active' : 'Loading Model...'}
         </span>
       </div>
     </div>
+    </>
   );
 }
